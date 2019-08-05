@@ -3,35 +3,28 @@ package main
 import (
 	"flag"
 	"fmt"
-	"io/ioutil"
-	"net/http"
+	"loader/client"
+	"loader/writer"
 )
 
 func main() {
 	ftpr := flag.String("url", "", "Path to the file to be downloaded")
 	flag.Parse()
 	url := *ftpr
-	fmt.Println("loading from:", url)
 
-	client := &http.Client{}
+	writer, err := writer.NewFileWriter(url)
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
+	defer writer.Close()
 
-	request, err := http.NewRequest("GET", url, nil)
+	client := client.NewClient(url)
+	data, err := client.Start()
 	if err != nil {
 		fmt.Println(err)
 		return
 	}
 
-	resp, err := client.Do(request)
-	if err != nil {
-		fmt.Println(err)
-		return
-	}
-	defer resp.Body.Close()
-
-	body, err := ioutil.ReadAll(resp.Body)
-	if err != nil {
-		fmt.Println(err)
-		return
-	}
-	fmt.Println(string(body))
+	writer.Write(data)
 }
