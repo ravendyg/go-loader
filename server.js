@@ -9,10 +9,14 @@ const server = http.createServer((req, res) => {
             range,
         },
     } = req;
+    if (req.method !== 'GET' && req.method !== 'HEAD') {
+        res.statusCode = 405;
+        return res.end();
+    }
     let rangeStart = 0;
     let rangeEnd;
     if (range) {
-        [rangeStart, rangeEnd] = range.split('-');
+        [rangeStart, rangeEnd] = range.split('-').map(i => parseInt(i, 10));
     }
     let fileName = path.join(__dirname, url);
     if (fileName[fileName.length - 1] === path.sep) {
@@ -31,6 +35,12 @@ const server = http.createServer((req, res) => {
                 return res.end();
             }
 
+            if (req.method === 'HEAD') {
+                res.setHeader('content-length', stat.size);
+                res.statusCode = 200;
+                return res.end();
+            }
+
             fs.open(fileName, 'r', (openErr, fd) => {
                 if (openErr) {
                     console.error(openErr);
@@ -43,7 +53,7 @@ const server = http.createServer((req, res) => {
                 }
                 const chunkSize = rangeEnd - rangeStart;
                 const buffer = new Buffer(chunkSize);
-                fs.read(fd, buffer, rangeStart, chunkSize, 0, (readErr, read) => {
+                fs.read(fd, buffer, 0, chunkSize, rangeStart, (readErr, read) => {
                     if (readErr) {
                         console.error(readErr);
                         res.statusCode = 500;
