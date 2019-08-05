@@ -11,3 +11,6 @@ Console multi threaded(?) file loder supported resuming downloading.
 `go run main.go -url http://localhost:3011`
 
 
+### TODO
+- Limit number of simultaneous connections
+- Make possible to continue an interrupted download

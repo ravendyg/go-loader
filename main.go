@@ -12,6 +12,8 @@ func main() {
 	flag.Parse()
 	url := *ftpr
 
+	dataChannel := make(chan *client.Chunk)
+
 	writer, err := writer.NewFileWriter(url)
 	if err != nil {
 		fmt.Println(err)
@@ -19,12 +21,9 @@ func main() {
 	}
 	defer writer.Close()
 
-	client := client.NewClient(url)
-	data, err := client.Start()
-	if err != nil {
-		fmt.Println(err)
-		return
-	}
+	go client.Start(url, dataChannel)
 
-	writer.Write(data)
+	for chunk := range dataChannel {
+		writer.Write(chunk.Data, chunk.Start)
+	}
 }

@@ -67,7 +67,7 @@ const server = http.createServer((req, res) => {
                             return res.end();
                         }
 
-                        console.log(`sent ${read} bytes`);
+                        console.log(`sent ${read} bytes; from ${rangeStart} to ${rangeEnd}`);
                         res.end();
                     });
                 });

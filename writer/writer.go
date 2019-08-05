@@ -22,8 +22,8 @@ func NewFileWriter(url string) (*FileWriter, error) {
 	return &FileWriter{file}, nil
 }
 
-func (fw *FileWriter) Write(data []byte) (int, error) {
-	l, err := fw.file.Write(data)
+func (fw *FileWriter) Write(data []byte, offset int64) (int, error) {
+	l, err := fw.file.WriteAt(data, offset)
 	if err != nil {
 		return 0, err
 	}

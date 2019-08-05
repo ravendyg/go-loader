@@ -5,20 +5,15 @@ import (
 	"io/ioutil"
 	"net/http"
 	"strconv"
+	"sync"
 )
 
 const chunkSize = 20
 
-// HTTPClient - client interface
-type HTTPClient struct {
-	client *http.Client
-	url    string
-}
-
-// NewClient - create new client
-func NewClient(url string) *HTTPClient {
-	client := &http.Client{}
-	return &HTTPClient{client, url}
+// Chunk - DTO
+type Chunk struct {
+	Start int64
+	Data  []byte
 }
 
 func getSize(client *http.Client, url string) (int, error) {
@@ -48,48 +43,59 @@ func getSize(client *http.Client, url string) (int, error) {
 }
 
 // Start - start loading data
-// TODO: use channel
-func (hc *HTTPClient) Start() ([]byte, error) {
-	size, err := getSize(hc.client, hc.url)
+func Start(url string, data chan<- *Chunk) {
+	client := &http.Client{}
+	wg := sync.WaitGroup{}
+
+	size, err := getSize(client, url)
 	if err != nil {
 		fmt.Println(err)
-		return nil, err
+		return
 	}
 	fmt.Println("File size: ", size)
-	fmt.Println("loading from:", hc.url)
-	buf := make([]byte, 0)
+	fmt.Println("Loading from:", url)
 
 	var start int
 	var end = start + chunkSize
 
-	for end <= size {
+	for start <= size {
+		_start := start
+		_end := end
+		wg.Add(1)
+		go func() {
+			request, err := http.NewRequest("GET", url, nil)
+			if err != nil {
+				fmt.Println(err)
+				return
+			}
 
-		request, err := http.NewRequest("GET", hc.url, nil)
-		if err != nil {
-			fmt.Println(err)
-			return nil, err
-		}
+			request.Header.Add("Range", fmt.Sprintf("%d-%d", _start, _end))
 
-		request.Header.Add("Range", fmt.Sprintf("%d-%d", start, end))
+			resp, err := client.Do(request)
+			if err != nil {
+				fmt.Println(err)
+				return
+			}
 
-		resp, err := hc.client.Do(request)
-		if err != nil {
-			fmt.Println(err)
-			return nil, err
-		}
-		defer resp.Body.Close()
+			body, err := ioutil.ReadAll(resp.Body)
+			if err != nil {
+				fmt.Println(err)
+				return
+			}
 
-		body, err := ioutil.ReadAll(resp.Body)
-		if err != nil {
-			fmt.Println(err)
-			return nil, err
-		}
+			chunk := Chunk{
+				Data:  body,
+				Start: int64(_start),
+			}
+			data <- &chunk
 
-		buf = append(buf, body...)
-
-		start = end + 1
+			resp.Body.Close()
+			wg.Done()
+		}()
+		start = end
 		end = start + chunkSize
 	}
 
-	return buf, nil
+	wg.Wait()
+	close(data)
 }
