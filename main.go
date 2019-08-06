@@ -4,6 +4,7 @@ import (
 	"flag"
 	"fmt"
 	"loader/client"
+	"loader/dto"
 	"loader/writer"
 )
 
@@ -12,7 +13,7 @@ func main() {
 	flag.Parse()
 	url := *ftpr
 
-	dataChannel := make(chan *client.Chunk)
+	dataChannel := make(chan *dto.Chunk)
 
 	writer, err := writer.NewFileWriter(url)
 	if err != nil {
@@ -21,9 +22,12 @@ func main() {
 	}
 	defer writer.Close()
 
-	go client.Start(url, dataChannel)
+	size := client.Start(url, dataChannel)
 
+	loaded := 0
 	for chunk := range dataChannel {
 		writer.Write(chunk.Data, chunk.Start)
+		loaded += len(chunk.Data)
+		fmt.Printf("Loaded %d%%\n", loaded*100/size)
 	}
 }

@@ -22,58 +22,61 @@ const server = http.createServer((req, res) => {
     if (fileName[fileName.length - 1] === path.sep) {
         fileName += 'main.go';
     }
-    fs.exists(fileName, exists => {
-        if (!exists) {
-            res.statusCode = 404;
-            return res.end();
-        }
+    setTimeout(() => {
 
-        fs.stat(fileName, (statErr, stat) => {
-            if (statErr) {
-                console.error(statErr);
-                res.statusCode = 500;
+        fs.exists(fileName, exists => {
+            if (!exists) {
+                res.statusCode = 404;
                 return res.end();
             }
 
-            if (req.method === 'HEAD') {
-                res.setHeader('content-length', stat.size);
-                res.statusCode = 200;
-                return res.end();
-            }
-
-            fs.open(fileName, 'r', (openErr, fd) => {
-                if (openErr) {
-                    console.error(openErr);
+            fs.stat(fileName, (statErr, stat) => {
+                if (statErr) {
+                    console.error(statErr);
                     res.statusCode = 500;
                     return res.end();
                 }
 
-                if (!rangeEnd || stat.size < rangeEnd) {
-                    rangeEnd = stat.size;
+                if (req.method === 'HEAD') {
+                    res.setHeader('content-length', stat.size);
+                    res.statusCode = 200;
+                    return res.end();
                 }
-                const chunkSize = rangeEnd - rangeStart;
-                const buffer = new Buffer(chunkSize);
-                fs.read(fd, buffer, 0, chunkSize, rangeStart, (readErr, read) => {
-                    if (readErr) {
-                        console.error(readErr);
+
+                fs.open(fileName, 'r', (openErr, fd) => {
+                    if (openErr) {
+                        console.error(openErr);
                         res.statusCode = 500;
                         return res.end();
                     }
 
-                    res.write(buffer, writeError => {
-                        if (writeError) {
-                            console.error(writeError);
+                    if (!rangeEnd || stat.size < rangeEnd) {
+                        rangeEnd = stat.size;
+                    }
+                    const chunkSize = rangeEnd - rangeStart;
+                    const buffer = new Buffer(chunkSize);
+                    fs.read(fd, buffer, 0, chunkSize, rangeStart, (readErr, read) => {
+                        if (readErr) {
+                            console.error(readErr);
                             res.statusCode = 500;
                             return res.end();
                         }
 
-                        console.log(`sent ${read} bytes; from ${rangeStart} to ${rangeEnd}`);
-                        res.end();
+                        res.write(buffer, writeError => {
+                            if (writeError) {
+                                console.error(writeError);
+                                res.statusCode = 500;
+                                return res.end();
+                            }
+
+                            console.log(`sent ${read} bytes; from ${rangeStart} to ${rangeEnd}`);
+                            res.end();
+                        });
                     });
                 });
             });
         });
-    });
+    }, 400)
 });
 
 server.listen(3011);

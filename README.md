@@ -1,6 +1,8 @@
 ### Description
 Console multi threaded(?) file loder supported resuming downloading.
 
+Cannot dynamically reallocate threads (maybe implement later).
+
 ### Compile
 `go build main.go`
 
@@ -12,5 +14,4 @@ Console multi threaded(?) file loder supported resuming downloading.
 
 
 ### TODO
-- Limit number of simultaneous connections
 - Make possible to continue an interrupted download
