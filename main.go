@@ -6,28 +6,39 @@ import (
 	"loader/client"
 	"loader/dto"
 	"loader/writer"
+	"strings"
 )
 
 func main() {
-	ftpr := flag.String("url", "", "Path to the file to be downloaded")
+	ftprURL := flag.String("url", "", "Path to the file to be downloaded")
+	ftprName := flag.String("name", "", "File name")
 	flag.Parse()
-	url := *ftpr
+	url := *ftprURL
+	fileName := *ftprName
 
 	dataChannel := make(chan *dto.Chunk)
 
-	writer, err := writer.NewFileWriter(url)
+	if fileName == "" {
+		nameChunks := strings.Split(url, "/")
+		fileName = nameChunks[len(nameChunks)-1]
+	}
+
+	writer, err := writer.NewFileWriter(url, fileName)
 	if err != nil {
 		fmt.Println(err)
 		return
 	}
-	defer writer.Close()
 
 	size := client.Start(url, dataChannel)
 
 	loaded := 0
 	for chunk := range dataChannel {
-		writer.Write(chunk.Data, chunk.Start)
+		writer.WriteData(chunk)
 		loaded += len(chunk.Data)
 		fmt.Printf("Loaded %d%%\n", loaded*100/size)
+	}
+	err = writer.Finish()
+	if err != nil {
+		fmt.Println(err)
 	}
 }

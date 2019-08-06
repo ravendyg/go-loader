@@ -49,10 +49,12 @@ func (ld *loader) startThread(offset int, end int) {
 			return
 		}
 
-		chunk := dto.Chunk{
-			Data:  body,
-			Start: int64(_start),
+		chunkDescriptor := dto.ChunkDescriptor{
+			Start:  int64(offset),
+			End:    int64(end),
+			Offset: int64(_start),
 		}
+		chunk := dto.Chunk{ChunkDescriptor: &chunkDescriptor, Data: body}
 		ld.data <- &chunk
 
 		resp.Body.Close()

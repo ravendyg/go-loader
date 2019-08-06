@@ -1,29 +1,33 @@
 package writer
 
 import (
+	"fmt"
+	"loader/dto"
 	"os"
-	"strings"
 )
+
+var tmpPostfix = ".tmp"
+var dataPostfix = ".info"
 
 // FileWriter - writer interface
 type FileWriter struct {
-	file *os.File
+	fileName string
+	file     *os.File
 }
 
 // NewFileWriter - create new writer
-func NewFileWriter(url string) (*FileWriter, error) {
-	nameChunks := strings.Split(url, "/")
-	fileName := nameChunks[len(nameChunks)-1]
-	file, err := os.Create(fileName)
+func NewFileWriter(url string, fileName string) (*FileWriter, error) {
+	file, err := os.Create(fileName + tmpPostfix)
 	if err != nil {
 		return nil, err
 	}
 
-	return &FileWriter{file}, nil
+	return &FileWriter{fileName, file}, nil
 }
 
-func (fw *FileWriter) Write(data []byte, offset int64) (int, error) {
-	l, err := fw.file.WriteAt(data, offset)
+// WriteData - write data
+func (fw *FileWriter) WriteData(chunk *dto.Chunk) (int, error) {
+	l, err := fw.file.WriteAt(chunk.Data, chunk.Offset)
 	if err != nil {
 		return 0, err
 	}
@@ -31,11 +35,17 @@ func (fw *FileWriter) Write(data []byte, offset int64) (int, error) {
 	return l, nil
 }
 
-// Close - close file
-func (fw *FileWriter) Close() error {
-	if fw.file == nil {
-		return nil
-	}
+// Finish - clean up
+func (fw *FileWriter) Finish() error {
 	err := fw.file.Close()
-	return err
+	if err != nil {
+		return err
+	}
+
+	fmt.Println(fw.fileName+tmpPostfix, fw.fileName)
+	err = os.Rename(fw.fileName+tmpPostfix, fw.fileName)
+	if err == nil {
+		return err
+	}
+	return nil
 }
