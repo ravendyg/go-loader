@@ -23,30 +23,48 @@ func main() {
 		fileName = nameChunks[len(nameChunks)-1]
 	}
 
-	writer, err := writer.NewFileWriter(url, fileName)
+	fi, err := writer.NewFileWriter(url, fileName)
 	if err != nil {
 		fmt.Println(err)
 		return
 	}
 
+	a, err := fi.ReadMeatada()
+	fmt.Println(a, err)
+
 	descriptor := dto.ProcessDescriptor{
-		URL:      url,
-		FileName: fileName,
+		URL:              url,
+		FileName:         fileName,
+		ChunkDescriptors: nil,
+		Size:             0,
+		Loaded:           0,
 	}
 
-	client.Start(&descriptor, dataChannel)
+	size, chunkDescriptors, err := client.Start(&descriptor, dataChannel)
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
 
-	var loaded int64
+	descriptor.Size = size
+	descriptor.ChunkDescriptors = chunkDescriptors
+
 	for chunk := range dataChannel {
-		writer.WriteData(chunk)
-		loaded += int64(len(chunk.Data))
-		fmt.Printf("Loaded %d%%\n", loaded*100/descriptor.Size)
-		if loaded >= descriptor.Size {
+		fi.WriteData(chunk)
+		descriptor.Loaded += int64(len(chunk.Data))
+		// TODO: use map?
+		for i := 0; i < len(descriptor.ChunkDescriptors); i++ {
+			if chunkDescriptors[i].ID == chunk.ChunkDescriptor.ID {
+				chunkDescriptors[i] = chunk.ChunkDescriptor
+			}
+		}
+		fmt.Printf("Loaded %d%%\n", descriptor.Loaded*100/descriptor.Size)
+		if descriptor.Loaded >= descriptor.Size {
 			close(dataChannel)
 		}
 	}
 
-	err = writer.Finish()
+	err = fi.Finish()
 	if err != nil {
 		fmt.Println(err)
 	}

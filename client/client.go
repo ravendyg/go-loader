@@ -19,7 +19,7 @@ type loader struct {
 	data   chan<- *dto.Chunk
 }
 
-func (ld *loader) startThread(descriptor dto.ChunkDescriptor) {
+func (ld *loader) startThread(descriptor *dto.ChunkDescriptor) {
 	offset := descriptor.Offset
 	cursor := descriptor.Start + offset
 
@@ -45,13 +45,13 @@ func (ld *loader) startThread(descriptor dto.ChunkDescriptor) {
 			return
 		}
 
-		chunk := dto.Chunk{ChunkDescriptor: descriptor, Data: body}
-		ld.data <- &chunk
-
 		resp.Body.Close()
 
 		cursor = chunkEnd
 		descriptor.Offset = cursor - descriptor.Start
+
+		chunk := dto.Chunk{ChunkDescriptor: *descriptor, Data: body}
+		ld.data <- &chunk
 	}
 }
 
@@ -82,25 +82,28 @@ func (ld *loader) getSize() (int, error) {
 }
 
 func createChunkDescriptors(size int64) []dto.ChunkDescriptor {
+	id := 0
 	threadChunkSize := size/threadCount + 1
 	var start int64
 	chunkDescriptors := make([]dto.ChunkDescriptor, 0)
 	for start < size {
 		end := utils.Min(start+threadChunkSize, size)
 		chunkDescriptor := dto.ChunkDescriptor{
+			ID:     id,
 			Start:  int64(start),
 			Offset: 0,
 			End:    int64(end),
 		}
 		chunkDescriptors = append(chunkDescriptors, chunkDescriptor)
 		start += threadChunkSize
+		id++
 	}
 
 	return chunkDescriptors
 }
 
 // Start - start loading data
-func Start(info *dto.ProcessDescriptor, data chan<- *dto.Chunk) error {
+func Start(info *dto.ProcessDescriptor, data chan<- *dto.Chunk) (int64, []dto.ChunkDescriptor, error) {
 	ld := &loader{
 		client: &http.Client{},
 		url:    info.URL,
@@ -109,18 +112,21 @@ func Start(info *dto.ProcessDescriptor, data chan<- *dto.Chunk) error {
 
 	_size, err := ld.getSize()
 	if err != nil {
-		return err
+		return 0, nil, err
 	}
 	size := int64(_size)
-	info.Size = size
 
-	chunkDescriptors := createChunkDescriptors(size)
-
-	fmt.Println("Loading from:", info.URL, size, "bytes")
-
-	for _, chunkDescriptor := range chunkDescriptors {
-		go ld.startThread(chunkDescriptor)
+	var chunkDescriptors []dto.ChunkDescriptor
+	if size != info.Size || info.ChunkDescriptors == nil {
+		chunkDescriptors = createChunkDescriptors(size)
+	} else {
+		chunkDescriptors = info.ChunkDescriptors
 	}
 
-	return nil
+	fmt.Println("Loading from:", info.URL, size, "bytes")
+	for i := 0; i < len(chunkDescriptors); i++ {
+		go ld.startThread(&chunkDescriptors[i])
+	}
+
+	return size, chunkDescriptors, nil
 }
