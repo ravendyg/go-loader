@@ -1,7 +1,7 @@
 package utils
 
-// Min - min(int, int)
-func Min(args ...int) int {
+// Min - min(int64...)
+func Min(args ...int64) int64 {
 	if len(args) == 0 {
 		return 0
 	}

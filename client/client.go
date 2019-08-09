@@ -7,35 +7,31 @@ import (
 	"loader/utils"
 	"net/http"
 	"strconv"
-	"sync"
 )
 
 // TODO: select automatically
-const chunkSize = 100
+const maxChunkSize = 300
 const threadCount = 2
 
 type loader struct {
 	client *http.Client
 	url    string
-	wg     *sync.WaitGroup
 	data   chan<- *dto.Chunk
 }
 
-func (ld *loader) startThread(offset int, end int) {
-	chunkStart := offset
-	chunkEnd := chunkStart + chunkSize
+func (ld *loader) startThread(descriptor dto.ChunkDescriptor) {
+	offset := descriptor.Offset
+	cursor := descriptor.Start + offset
 
-	for chunkStart <= end {
-		_start := chunkStart
-		_end := utils.Min(chunkEnd, end)
-
+	for cursor <= descriptor.End {
+		chunkEnd := utils.Min(cursor+maxChunkSize, descriptor.End)
 		request, err := http.NewRequest("GET", ld.url, nil)
 		if err != nil {
 			fmt.Println(err)
 			return
 		}
 
-		request.Header.Add("Range", fmt.Sprintf("%d-%d", _start, _end))
+		request.Header.Add("Range", fmt.Sprintf("%d-%d", cursor, chunkEnd))
 
 		resp, err := ld.client.Do(request)
 		if err != nil {
@@ -49,30 +45,24 @@ func (ld *loader) startThread(offset int, end int) {
 			return
 		}
 
-		chunkDescriptor := dto.ChunkDescriptor{
-			Start:  int64(offset),
-			End:    int64(end),
-			Offset: int64(_start),
-		}
-		chunk := dto.Chunk{ChunkDescriptor: &chunkDescriptor, Data: body}
+		chunk := dto.Chunk{ChunkDescriptor: descriptor, Data: body}
 		ld.data <- &chunk
 
 		resp.Body.Close()
 
-		chunkStart = chunkEnd
-		chunkEnd = chunkStart + chunkSize
+		cursor = chunkEnd
+		descriptor.Offset = cursor - descriptor.Start
 	}
-	ld.wg.Done()
 }
 
-func getSize(client *http.Client, url string) (int, error) {
-	request, err := http.NewRequest("HEAD", url, nil)
+func (ld *loader) getSize() (int, error) {
+	request, err := http.NewRequest("HEAD", ld.url, nil)
 	if err != nil {
 		fmt.Println(err)
 		return 0, err
 	}
 
-	resp, err := client.Do(request)
+	resp, err := ld.client.Do(request)
 	if err != nil {
 		fmt.Println(err)
 		return 0, err
@@ -91,39 +81,46 @@ func getSize(client *http.Client, url string) (int, error) {
 	return size, nil
 }
 
-// Start - start loading data
-func Start(url string, data chan<- *dto.Chunk) int {
-	client := &http.Client{}
-	wg := sync.WaitGroup{}
-
-	size, err := getSize(client, url)
-	if err != nil {
-		fmt.Println(err)
-		return 0
+func createChunkDescriptors(size int64) []dto.ChunkDescriptor {
+	threadChunkSize := size/threadCount + 1
+	var start int64
+	chunkDescriptors := make([]dto.ChunkDescriptor, 0)
+	for start < size {
+		end := utils.Min(start+threadChunkSize, size)
+		chunkDescriptor := dto.ChunkDescriptor{
+			Start:  int64(start),
+			Offset: 0,
+			End:    int64(end),
+		}
+		chunkDescriptors = append(chunkDescriptors, chunkDescriptor)
+		start += threadChunkSize
 	}
 
-	go func() {
-		fmt.Println("Loading from:", url)
-		ld := &loader{
-			client: client,
-			url:    url,
-			wg:     &wg,
-			data:   data,
-		}
+	return chunkDescriptors
+}
 
-		threadChunkSize := size/threadCount + 1
-		offset := 0
-		for offset < size {
-			end := utils.Min(offset+threadChunkSize, size)
+// Start - start loading data
+func Start(info *dto.ProcessDescriptor, data chan<- *dto.Chunk) error {
+	ld := &loader{
+		client: &http.Client{},
+		url:    info.URL,
+		data:   data,
+	}
 
-			wg.Add(1)
-			go ld.startThread(offset, end)
-			offset += threadChunkSize
-		}
+	_size, err := ld.getSize()
+	if err != nil {
+		return err
+	}
+	size := int64(_size)
+	info.Size = size
 
-		wg.Wait()
-		close(data)
-	}()
+	chunkDescriptors := createChunkDescriptors(size)
 
-	return size
+	fmt.Println("Loading from:", info.URL, size, "bytes")
+
+	for _, chunkDescriptor := range chunkDescriptors {
+		go ld.startThread(chunkDescriptor)
+	}
+
+	return nil
 }

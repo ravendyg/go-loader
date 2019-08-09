@@ -1,7 +1,6 @@
 package writer
 
 import (
-	"fmt"
 	"loader/dto"
 	"os"
 )
@@ -27,7 +26,7 @@ func NewFileWriter(url string, fileName string) (*FileWriter, error) {
 
 // WriteData - write data
 func (fw *FileWriter) WriteData(chunk *dto.Chunk) (int, error) {
-	l, err := fw.file.WriteAt(chunk.Data, chunk.Offset)
+	l, err := fw.file.WriteAt(chunk.Data, chunk.Start+chunk.Offset)
 	if err != nil {
 		return 0, err
 	}
@@ -42,7 +41,6 @@ func (fw *FileWriter) Finish() error {
 		return err
 	}
 
-	fmt.Println(fw.fileName+tmpPostfix, fw.fileName)
 	err = os.Rename(fw.fileName+tmpPostfix, fw.fileName)
 	if err == nil {
 		return err

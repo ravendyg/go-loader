@@ -29,14 +29,23 @@ func main() {
 		return
 	}
 
-	size := client.Start(url, dataChannel)
+	descriptor := dto.ProcessDescriptor{
+		URL:      url,
+		FileName: fileName,
+	}
 
-	loaded := 0
+	client.Start(&descriptor, dataChannel)
+
+	var loaded int64
 	for chunk := range dataChannel {
 		writer.WriteData(chunk)
-		loaded += len(chunk.Data)
-		fmt.Printf("Loaded %d%%\n", loaded*100/size)
+		loaded += int64(len(chunk.Data))
+		fmt.Printf("Loaded %d%%\n", loaded*100/descriptor.Size)
+		if loaded >= descriptor.Size {
+			close(dataChannel)
+		}
 	}
+
 	err = writer.Finish()
 	if err != nil {
 		fmt.Println(err)

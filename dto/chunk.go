@@ -9,13 +9,14 @@ type ChunkDescriptor struct {
 
 // Chunk - DTO
 type Chunk struct {
-	*ChunkDescriptor
+	ChunkDescriptor
 	Data []byte
 }
 
 // ProcessDescriptor - file download state
 type ProcessDescriptor struct {
-	url      string
-	fileName string
-	chunks   []Chunk
+	URL              string
+	FileName         string
+	ChunkDescriptors []ChunkDescriptor
+	Size             int64
 }
