@@ -41,34 +41,34 @@ func main() {
 		return
 	}
 
-	if descriptor == nil {
-		descriptor = &dto.ProcessDescriptor{
-			URL:              url,
-			FileName:         fileName,
-			ChunkDescriptors: nil,
-			Size:             0,
-		}
-	}
-
-	size, chunkDescriptors, err := client.Start(descriptor, dataChannel)
+	loader := client.NewClient(url, dataChannel)
+	size, err := loader.GetSize()
 	if err != nil {
 		fmt.Println(err)
 		return
 	}
 
-	descriptor.Size = size
-	descriptor.ChunkDescriptors = chunkDescriptors
+	if descriptor == nil || descriptor.Size != size {
+		descriptor = &dto.ProcessDescriptor{
+			URL:              url,
+			FileName:         fileName,
+			ChunkDescriptors: loader.CreateChunkDescriptors(size),
+			Size:             size,
+		}
+	}
+
+	loader.Start(descriptor)
 
 	for chunk := range dataChannel {
 		fi.WriteData(&chunk)
 		var loaded int64
-		// TODO: use map?
 		for i := 0; i < len(descriptor.ChunkDescriptors); i++ {
-			if chunkDescriptors[i].ID == chunk.ID {
-				chunkDescriptors[i].Offset = chunk.Cursor - chunkDescriptors[i].Start + int64(len(chunk.Data))
+			if descriptor.ChunkDescriptors[i].ID == chunk.ID {
+				descriptor.ChunkDescriptors[i].Offset = chunk.Cursor -
+					descriptor.ChunkDescriptors[i].Start + int64(len(chunk.Data))
 			}
 
-			loaded += chunkDescriptors[i].Offset
+			loaded += descriptor.ChunkDescriptors[i].Offset
 		}
 		fi.WriteMetaData(descriptor)
 		fmt.Printf("Loaded %d%%\n", loaded*100/descriptor.Size)
