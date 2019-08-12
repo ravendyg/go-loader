@@ -10,8 +10,9 @@ type ChunkDescriptor struct {
 
 // Chunk - DTO
 type Chunk struct {
-	ChunkDescriptor
-	Data []byte
+	ID     int
+	Cursor int64
+	Data   []byte
 }
 
 // ProcessDescriptor - file download state
@@ -20,5 +21,4 @@ type ProcessDescriptor struct {
 	FileName         string
 	ChunkDescriptors []ChunkDescriptor
 	Size             int64
-	Loaded           int64
 }

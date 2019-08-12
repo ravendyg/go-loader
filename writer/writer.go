@@ -14,7 +14,6 @@ var dataPostfix = ".info"
 type FileWriter struct {
 	fileName string
 	file     *os.File
-	dataFile *os.File
 }
 
 func encode(d dto.ProcessDescriptor) ([]byte, error) {
@@ -32,17 +31,19 @@ func decode(st []byte) (*dto.ProcessDescriptor, error) {
 	b := bytes.Buffer{}
 	b.Write(st)
 	d := gob.NewDecoder(&b)
-	err := d.Decode(m)
-	return &m, err
+	err := d.Decode(&m)
+	if err != nil {
+		return nil, err
+	}
+	return &m, nil
 }
 
 // NewFileWriter - create new writer
 func NewFileWriter(url string, fileName string) (*FileWriter, error) {
-	file, err := os.Create(fileName + tmpPostfix)
-	if err != nil {
-		return nil, err
+	file, err := os.OpenFile(fileName+tmpPostfix, os.O_RDWR, 0644)
+	if os.IsNotExist(err) {
+		file, err = os.Create(fileName + tmpPostfix)
 	}
-	dataFile, err := os.Create(fileName + dataPostfix)
 	if err != nil {
 		return nil, err
 	}
@@ -50,13 +51,16 @@ func NewFileWriter(url string, fileName string) (*FileWriter, error) {
 	return &FileWriter{
 		fileName,
 		file,
-		dataFile,
 	}, nil
 }
 
 // WriteData - write data
 func (fw *FileWriter) WriteData(chunk *dto.Chunk) (int, error) {
-	l, err := fw.file.WriteAt(chunk.Data, chunk.Start+chunk.Offset)
+	l, err := fw.file.WriteAt(chunk.Data, chunk.Cursor)
+	if err != nil {
+		return 0, err
+	}
+	err = fw.file.Sync()
 	if err != nil {
 		return 0, err
 	}
@@ -66,22 +70,37 @@ func (fw *FileWriter) WriteData(chunk *dto.Chunk) (int, error) {
 
 // WriteMetaData - write information about the progress
 func (fw *FileWriter) WriteMetaData(descriptor *dto.ProcessDescriptor) (int, error) {
+	dataFile, err := os.Create(fw.fileName + dataPostfix)
 	bt, err := encode(*descriptor)
-	l, err := fw.dataFile.Write(bt)
+	l, err := dataFile.Write(bt)
 	if err != nil {
 		return 0, err
 	}
+	dataFile.Close()
 
 	return l, nil
 }
 
 // ReadMeatada - read information about an interrupted process
 func (fw *FileWriter) ReadMeatada() (*dto.ProcessDescriptor, error) {
-	var b []byte
-	_, err := fw.dataFile.Read(b)
+	dataFile, err := os.Open(fw.fileName + dataPostfix)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil, nil
+		}
+		return nil, err
+	}
+	stat, err := dataFile.Stat()
 	if err != nil {
 		return nil, err
 	}
+	var size = stat.Size()
+	b := make([]byte, size)
+	_, err = dataFile.Read(b)
+	if err != nil {
+		return nil, err
+	}
+	dataFile.Close()
 
 	return decode(b)
 }
@@ -94,8 +113,14 @@ func (fw *FileWriter) Finish() error {
 	}
 
 	err = os.Rename(fw.fileName+tmpPostfix, fw.fileName)
-	if err == nil {
+	if err != nil {
 		return err
 	}
+
+	err = os.Remove(fw.fileName + dataPostfix)
+	if err != nil {
+		return err
+	}
+
 	return nil
 }

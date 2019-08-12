@@ -11,17 +11,16 @@ import (
 
 // TODO: select automatically
 const maxChunkSize = 300
-const threadCount = 2
+const threadCount = 3
 
 type loader struct {
 	client *http.Client
 	url    string
-	data   chan<- *dto.Chunk
+	data   chan<- dto.Chunk
 }
 
 func (ld *loader) startThread(descriptor *dto.ChunkDescriptor) {
-	offset := descriptor.Offset
-	cursor := descriptor.Start + offset
+	cursor := descriptor.Start + descriptor.Offset
 
 	for cursor <= descriptor.End {
 		chunkEnd := utils.Min(cursor+maxChunkSize, descriptor.End)
@@ -47,11 +46,14 @@ func (ld *loader) startThread(descriptor *dto.ChunkDescriptor) {
 
 		resp.Body.Close()
 
-		cursor = chunkEnd
-		descriptor.Offset = cursor - descriptor.Start
+		chunk := dto.Chunk{
+			ID:     descriptor.ID,
+			Cursor: cursor,
+			Data:   body,
+		}
+		ld.data <- chunk
 
-		chunk := dto.Chunk{ChunkDescriptor: *descriptor, Data: body}
-		ld.data <- &chunk
+		cursor = chunkEnd
 	}
 }
 
@@ -103,7 +105,7 @@ func createChunkDescriptors(size int64) []dto.ChunkDescriptor {
 }
 
 // Start - start loading data
-func Start(info *dto.ProcessDescriptor, data chan<- *dto.Chunk) (int64, []dto.ChunkDescriptor, error) {
+func Start(info *dto.ProcessDescriptor, data chan<- dto.Chunk) (int64, []dto.ChunkDescriptor, error) {
 	ld := &loader{
 		client: &http.Client{},
 		url:    info.URL,
