@@ -65,7 +65,7 @@ func main() {
 		for i := 0; i < len(descriptor.ChunkDescriptors); i++ {
 			if descriptor.ChunkDescriptors[i].ID == chunk.ID {
 				descriptor.ChunkDescriptors[i].Offset = chunk.Cursor -
-					descriptor.ChunkDescriptors[i].Start + int64(len(chunk.Data))
+					descriptor.ChunkDescriptors[i].Start + chunk.Size
 			}
 
 			loaded += descriptor.ChunkDescriptors[i].Offset

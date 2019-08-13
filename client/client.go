@@ -47,14 +47,17 @@ func (ld *Loader) startThread(descriptor *dto.ChunkDescriptor) {
 
 		resp.Body.Close()
 
+		size := int64(len(body))
+
 		chunk := dto.Chunk{
 			ID:     descriptor.ID,
 			Cursor: cursor,
+			Size:   size,
 			Data:   body,
 		}
 		ld.data <- chunk
 
-		cursor = chunkEnd
+		cursor = cursor + size
 	}
 }
 

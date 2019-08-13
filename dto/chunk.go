@@ -12,6 +12,7 @@ type ChunkDescriptor struct {
 type Chunk struct {
 	ID     int
 	Cursor int64
+	Size   int64
 	Data   []byte
 }
 
