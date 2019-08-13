@@ -76,7 +76,7 @@ const server = http.createServer((req, res) => {
                 });
             });
         });
-    }, 400)
+    }, 1000)
 });
 
 server.listen(3011);

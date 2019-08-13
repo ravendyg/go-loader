@@ -14,4 +14,3 @@ Cannot dynamically reallocate threads (maybe implement later).
 
 
 ### TODO
-- Make possible to continue an interrupted download
